@@ -56,29 +56,36 @@
 
 </div>
 
+<!-- Elemen Audio tersembunyi menggunakan Data URI (Suara Beep pendek bawaan) -->
+<audio id="beepAudio" preload="auto">
+  <source src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU..." crossorigin="anonymous">
+</audio>
+
 <script>
   let scanner = null;
   let running = false;
   let processing = false;
 
-  // Fungsi untuk membunyikan audio Beep menggunakan Web Audio API
+  // Fungsi untuk memutar suara beep instan tanpa tombol tambahan
   function playBeep() {
-    try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); // Frekuensi suara (pitch)
-      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);        // Volume suara
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.15); // Durasi suara (0.15 detik)
-    } catch (e) {
-      console.error("Audio error: ", e);
+    const audio = document.getElementById('beepAudio');
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(e => {
+        // Jika browser memblokir, kita gunakan Web Audio API sebagai cadangan
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const oscillator = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+          gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+          oscillator.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          oscillator.start();
+          oscillator.stop(audioCtx.currentTime + 0.15);
+        } catch (err) {}
+      });
     }
   }
 
@@ -111,7 +118,7 @@
           if (processing) return;
           processing = true;
 
-          // Bunyikan audio beep saat QR berhasil di-scan
+          // Bunyikan audio beep otomatis saat QR berhasil dibaca
           playBeep();
 
           showStatus("QR berhasil dibaca!", "green");
@@ -150,7 +157,7 @@
     }
   }
 
-  // Langsung aktifkan kamera begitu halaman selesai dimuat
+  // Langsung aktifkan kamera begitu halaman selesai dimuat (seperti semula)
   window.addEventListener("load", function() {
     startScanner();
   });
