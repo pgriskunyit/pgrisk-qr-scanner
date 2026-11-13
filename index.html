@@ -61,6 +61,27 @@
   let running = false;
   let processing = false;
 
+  // Fungsi untuk membunyikan audio Beep menggunakan Web Audio API
+  function playBeep() {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); // Frekuensi suara (pitch)
+      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);        // Volume suara
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.15); // Durasi suara (0.15 detik)
+    } catch (e) {
+      console.error("Audio error: ", e);
+    }
+  }
+
   function showStatus(message, color) {
     const el = document.getElementById("status");
     el.innerText = message;
@@ -89,6 +110,9 @@
         async function(decodedText) {
           if (processing) return;
           processing = true;
+
+          // Bunyikan audio beep saat QR berhasil di-scan
+          playBeep();
 
           showStatus("QR berhasil dibaca!", "green");
 
