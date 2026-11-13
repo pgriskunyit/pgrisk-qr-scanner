@@ -131,65 +131,63 @@
   }
 
   // Menghasilkan bunyi beep tanpa file eksternal
-  async function playBeep() {
-    if (!audioCtx) {
-      initAudio();
-    }
+  
+async function playBeep() {
+  if (!audioCtx) {
+    initAudio();
+  }
 
-    if (!audioCtx) return;
+  if (!audioCtx) return;
 
-    // Coba aktifkan kembali jika audio masih suspended
-    if (audioCtx.state !== "running") {
-      await unlockAudio();
-    }
+  if (audioCtx.state !== "running") {
+    await unlockAudio();
+  }
 
-    // Jika browser tetap memblokir audio, hentikan.
-    // Tidak ada cara legal untuk memaksa autoplay.
-    if (audioCtx.state !== "running") {
-      console.warn("Beep tidak dapat diputar: audio diblokir browser.");
-      return;
-    }
+  if (audioCtx.state !== "running") return;
 
-    try {
+  try {
+    const now = audioCtx.currentTime;
+
+    // Dua nada elektronik yang tajam
+    const frequencies = [1450, 1950];
+
+    frequencies.forEach((frequency, index) => {
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
 
-      oscillator.type = "sine";
-
-      // Frekuensi beep
+      oscillator.type = "square";
       oscillator.frequency.setValueAtTime(
-        1000,
-        audioCtx.currentTime
+        frequency,
+        now
       );
 
-      // Volume dan envelope agar bunyi bersih
-      gainNode.gain.setValueAtTime(
-        0.0001,
-        audioCtx.currentTime
-      );
+      const start = now + (index * 0.045);
+      const duration = 0.075;
 
+      gainNode.gain.setValueAtTime(0.0001, start);
       gainNode.gain.exponentialRampToValueAtTime(
-        0.18,
-        audioCtx.currentTime + 0.015
+        0.12,
+        start + 0.005
       );
-
       gainNode.gain.exponentialRampToValueAtTime(
         0.0001,
-        audioCtx.currentTime + 0.16
+        start + duration
       );
 
       oscillator.connect(gainNode);
       gainNode.connect(audioCtx.destination);
 
-      oscillator.start(audioCtx.currentTime);
-      oscillator.stop(audioCtx.currentTime + 0.17);
+      oscillator.start(start);
+      oscillator.stop(start + duration + 0.005);
+    });
 
-      audioReady = true;
+    audioReady = true;
 
-    } catch (error) {
-      console.warn("Gagal memutar beep:", error);
-    }
+  } catch (error) {
+    console.warn("Gagal memutar beep:", error);
   }
+}
+
 
   // ==========================================
   // STATUS SCANNER
