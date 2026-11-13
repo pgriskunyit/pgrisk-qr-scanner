@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -24,7 +25,10 @@
       box-shadow: 0 2px 10px #0002;
     }
 
-    h2 { font-size: 20px; margin-top: 0; }
+    h2 {
+      font-size: 20px;
+      margin-top: 0;
+    }
 
     #reader {
       width: 100%;
@@ -46,54 +50,160 @@
 
 <div class="card">
 
-  <h2>Scanner QR Code PGRI</h2>
+  <h2>Scanner QR Code PGRI Sungai Kunyit</h2>
   <p>Arahkan kamera ke QR Code kartu PGRI.</p>
 
-  <!-- Kotak Kamera Scanner Langsung Tampil -->
   <div id="reader"></div>
 
-  <div id="status">Meminta izin kamera...</div>
+  <div id="status">Menyiapkan kamera dan audio...</div>
 
 </div>
-
-<!-- Elemen Audio tersembunyi menggunakan Data URI (Suara Beep pendek bawaan) -->
-<audio id="beepAudio" preload="auto">
-  <source src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU..." crossorigin="anonymous">
-</audio>
 
 <script>
   let scanner = null;
   let running = false;
   let processing = false;
 
-  // Fungsi untuk memutar suara beep instan tanpa tombol tambahan
-  function playBeep() {
-    const audio = document.getElementById('beepAudio');
-    if (audio) {
-      audio.currentTime = 0;
-      audio.play().catch(e => {
-        // Jika browser memblokir, kita gunakan Web Audio API sebagai cadangan
-        try {
-          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          const oscillator = audioCtx.createOscillator();
-          const gainNode = audioCtx.createGain();
-          oscillator.type = 'sine';
-          oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
-          gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-          oscillator.connect(gainNode);
-          gainNode.connect(audioCtx.destination);
-          oscillator.start();
-          oscillator.stop(audioCtx.currentTime + 0.15);
-        } catch (err) {}
-      });
+  // ==========================================
+  // SISTEM AUDIO BEEP OTOMATIS
+  // ==========================================
+
+  let audioCtx = null;
+  let audioReady = false;
+
+  // Membuat AudioContext satu kali saja
+  function initAudio() {
+    if (audioCtx) return;
+
+    try {
+      const AudioContextClass =
+        window.AudioContext || window.webkitAudioContext;
+
+      if (!AudioContextClass) {
+        console.warn("Web Audio API tidak didukung browser.");
+        return;
+      }
+
+      audioCtx = new AudioContextClass();
+
+      // Mencoba mengaktifkan audio sedini mungkin
+      unlockAudio();
+
+    } catch (error) {
+      console.warn("Gagal menyiapkan audio:", error);
     }
   }
+
+  // Mengaktifkan AudioContext
+  async function unlockAudio() {
+    if (!audioCtx) return false;
+
+    try {
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+
+      audioReady = audioCtx.state === "running";
+
+      return audioReady;
+
+    } catch (error) {
+      audioReady = false;
+      console.warn("Audio belum dapat diaktifkan:", error);
+      return false;
+    }
+  }
+
+  // Persiapan audio melalui interaksi alami pengguna.
+  // Tidak menambahkan tombol atau langkah khusus.
+  function setupAudioUnlock() {
+    const events = [
+      "pointerdown",
+      "touchstart",
+      "keydown"
+    ];
+
+    events.forEach(eventName => {
+      document.addEventListener(eventName, function() {
+        unlockAudio();
+      }, { passive: true });
+    });
+  }
+
+  // Menghasilkan bunyi beep tanpa file eksternal
+  async function playBeep() {
+    if (!audioCtx) {
+      initAudio();
+    }
+
+    if (!audioCtx) return;
+
+    // Coba aktifkan kembali jika audio masih suspended
+    if (audioCtx.state !== "running") {
+      await unlockAudio();
+    }
+
+    // Jika browser tetap memblokir audio, hentikan.
+    // Tidak ada cara legal untuk memaksa autoplay.
+    if (audioCtx.state !== "running") {
+      console.warn("Beep tidak dapat diputar: audio diblokir browser.");
+      return;
+    }
+
+    try {
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.type = "sine";
+
+      // Frekuensi beep
+      oscillator.frequency.setValueAtTime(
+        1000,
+        audioCtx.currentTime
+      );
+
+      // Volume dan envelope agar bunyi bersih
+      gainNode.gain.setValueAtTime(
+        0.0001,
+        audioCtx.currentTime
+      );
+
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.18,
+        audioCtx.currentTime + 0.015
+      );
+
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.0001,
+        audioCtx.currentTime + 0.16
+      );
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      oscillator.start(audioCtx.currentTime);
+      oscillator.stop(audioCtx.currentTime + 0.17);
+
+      audioReady = true;
+
+    } catch (error) {
+      console.warn("Gagal memutar beep:", error);
+    }
+  }
+
+  // ==========================================
+  // STATUS SCANNER
+  // ==========================================
 
   function showStatus(message, color) {
     const el = document.getElementById("status");
     el.innerText = message;
     el.style.color = color || "#333";
   }
+
+  // ==========================================
+  // SCANNER QR CODE
+  // ==========================================
 
   async function startScanner() {
     if (running) return;
@@ -109,58 +219,103 @@
       }
 
       await scanner.start(
-        { facingMode: "environment" }, // Kamera belakang HP
+        { facingMode: "environment" },
+
         {
           fps: 10,
-          qrbox: { width: 220, height: 220 }
+          qrbox: {
+            width: 220,
+            height: 220
+          }
         },
+
         async function(decodedText) {
+
+          // Mencegah QR yang sama diproses berulang kali
           if (processing) return;
+
           processing = true;
 
-          // Bunyikan audio beep otomatis saat QR berhasil dibaca
+          // Bunyikan beep saat QR berhasil dibaca
           playBeep();
 
           showStatus("QR berhasil dibaca!", "green");
 
           try {
             await scanner.stop();
-          } catch(e) {}
+          } catch (error) {
+            console.warn("Scanner stop:", error);
+          }
 
           running = false;
 
-          // Kirim hasil ke halaman utama (form pendaftaran)
+          // Kirim hasil scan ke halaman form utama
           if (window.opener && !window.opener.closed) {
+
             window.opener.postMessage({
               type: "PGRI_QR_RESULT",
               value: decodedText.trim()
             }, "*");
 
-            showStatus("Berhasil! Menutup scanner...", "green");
-            setTimeout(() => window.close(), 800);
+            showStatus(
+              "Berhasil! Menutup scanner...",
+              "green"
+            );
+
+            setTimeout(function() {
+              window.close();
+            }, 800);
+
           } else {
-            showStatus("QR terbaca: " + decodedText, "green");
+
+            showStatus(
+              "QR terbaca: " + decodedText,
+              "green"
+            );
+
             processing = false;
           }
         },
-        function(error) {
-          // Error per frame diabaikan
+
+        function(errorMessage) {
+          // Error pembacaan per frame diabaikan
         }
       );
 
       running = true;
-      showStatus("Silakan scan QR Code untuk mendaftar Jalan Sehat PGRI.", "green");
+
+      showStatus(
+        "Silakan scan QR Code untuk mendaftar Jalan Sehat PGRI.",
+        "green"
+      );
 
     } catch (error) {
       console.error(error);
-      showStatus("Gagal akses kamera. Pastikan izin kamera diaktifkan.", "red");
+
+      showStatus(
+        "Gagal akses kamera. Pastikan izin kamera diaktifkan.",
+        "red"
+      );
     }
   }
 
-  // Langsung aktifkan kamera begitu halaman selesai dimuat (seperti semula)
+  // ==========================================
+  // INISIALISASI OTOMATIS
+  // ==========================================
+
   window.addEventListener("load", function() {
+
+    // Persiapkan audio terlebih dahulu
+    initAudio();
+
+    // Dengarkan interaksi alami tanpa tombol tambahan
+    setupAudioUnlock();
+
+    // Kamera langsung aktif
     startScanner();
+
   });
+
 </script>
 
 </body>
